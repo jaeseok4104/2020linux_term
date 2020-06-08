@@ -49,24 +49,13 @@ int main(int argc, char** argv)
 	if((unsigned)pfbdata == (unsigned) -1){
 		perror("Error Mapping\n");
 	}	
-	while(1<count--){
-		pixel = random_pixel();
-		posx1 = (int)(fvs.xres*1.0*rand()/(RAND_MAX+1.0));	
-		posx2 = (int)(fvs.xres*1.0*rand()/(RAND_MAX+1.0));	
-		posy1 = (int)(fvs.yres*1.0*rand()/(RAND_MAX+1.0));	
-		posy2 = (int)(fvs.yres*1.0*rand()/(RAND_MAX+1.0));	
-		swap(&posx1,&posx2);
-		swap(&posy1,&posy2);
-
-		usleep(500000);
-
-		for(repy=posy1; repy<posy2;repy++){
-			offset= repy*fvs.xres;
-			for(repx=posx1; repx< posx2;repx++){
-				*(pfbdata+offset+repx) = pixel;
-			}
-		}	
-	}
+	pixel = 0;
+	for(repy=0; repy<fvs.yres;repy++){
+		offset= repy*fvs.xres;
+		for(repx=0; repx< fvs.xres;repx++){
+			*(pfbdata+offset+repx) = pixel;
+		}
+	}	
 	munmap(pfbdata,fvs.xres*fvs.yres*32/8);
 	close(frame_fd);	
 	return 0;
