@@ -15,8 +15,18 @@ int main(int argc, char** argv){
 	int frame_fd;
 	int check;
 	struct fb_var_screeninfo st_fvs;
+	user_fb my_fb;
 	
-	user_fb my_fb = {1024,600,32};
+	if(argc<4){
+		my_fb.xres = 1024;
+		my_fb.yres = 600;
+		my_fb.bpps = 32;
+	}
+	else{
+		my_fb.xres = atoi(argv[1]);
+		my_fb.yres = atoi(argv[2]);
+		my_fb.bpps = atoi(argv[3]);
+	}	
 	
 	frame_fd = open("/dev/fb0",O_RDWR);
 	if(frame_fd < 0)
