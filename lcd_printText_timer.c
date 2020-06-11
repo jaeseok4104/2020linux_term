@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
@@ -19,23 +18,28 @@
 
 #define TOUCH_SCREEN "/dev/input/event1"
 
-#define 
-
 typedef unsigned int U32;
 
 int frame_fd, push_sw_dev;
 struct fb_var_screeninfo fvs;
 unsigned int* pfbdata;
 int timer;
-long int uCnt;
+
+struct sigaction sa;
+struct itimerval timer0;
+
 
 unsigned int initialize();
 unsigned int paint_dot(int x, int y, int width, U32 pixel);
-unsigned int paint_font(int num,int x, int y);
-unsigned int paint_str(int x, int y,char* str,int length,int fontSize);
+unsigned int paint_font(int x, int y,char* str,int length,int fontSize=10);
 
 unsigned int makePixel(U32 r, U32 g, U32 b){
 	return (U32)((r<<11)|(g<<5)|b);
+}
+
+void timer_handler(int signum)
+{
+	timer++;	
 }
 
 int main(int argc, char** argv){
@@ -45,12 +49,23 @@ int main(int argc, char** argv){
 	int posx1,posy1, posx2, posy2;
 	int repx, repy;
 	unsigned short row,col;
+	unsigned short  data[8];
 	unsigned char push_data[PUSH_SWITCH_MAX_BUTTON];
 	long int dist;
+	
+	//exit(1);
 
-	char strBuf[30];
-	int nLen;
+	memset(&sa,0,sizeof(sa));
+	sa.sa_handler = &timer_handler;
+	sigaction(SIGVTALRM,&sa,NULL);
 
+	timer0.it_value.tv_sec =0;
+	timer0.it_value.tv_usec = 1;
+
+	timer0.it_interval.tv_sec=0;
+	timer0.it_interval.tv_usec = 250000;
+	
+	setitimer(ITIMER_VIRTUAL,&timer0,NULL);
 	
 	if(!initialize()) exit(1);
 
@@ -79,9 +94,7 @@ int main(int argc, char** argv){
 				}
 			}
 		}
-		sprintf(strBuf,"Test %d",uCnt);
-		paint_str(50,50,strBuf,strlen(strBuf),3);
-		paint_font(10,150,150);
+		paint_font((uCnt/500),100,100);
 		printf("cnt : %d\n",uCnt);
 		usleep(1);
 		uCnt++;
@@ -90,7 +103,8 @@ int main(int argc, char** argv){
 	munmap(pfbdata,fvs.xres*fvs.yres*SCREEN_BPP /8); close(frame_fd);
 	close(push_sw_dev);
 
-	return 0; } 
+	return 0;
+} 
 
 unsigned int initialize(){
 	int check,i;
@@ -111,7 +125,8 @@ unsigned int initialize(){
 	}
 	
 	if(fvs.bits_per_pixel != 16){
-		perror("Unsupport Mode, 16Bpp Only!");	//return 0;
+		perror("Unsupport Mode, 16Bpp Only!");	
+		//return 0;
 	}	
 
 
@@ -124,9 +139,9 @@ unsigned int paint_dot(int x, int y, int width, U32 pixel){
 	int posy2 = y + width/2;
 
 	int repy,repx,offset,dist;
-	for(repy = posy1; repy<=posy2;repy++){
+	for(repy = posy1; repy<posy2;repy++){
 		offset = repy*fvs.xres;
-		for(repx=posx1;repx<=posx2;repx++){
+		for(repx=posx1;repx<posx2;repx++){
 			dist = (repy-y)*(repy-y) + (repx-x)*(repx-x);
 			if(offset+repx>= 1024*600 || (offset+repx)<=0) continue;
 			//if(dist <= (width*width)/4) *(pfbdata+offset+repx) = (int)pixel;	
@@ -135,47 +150,25 @@ unsigned int paint_dot(int x, int y, int width, U32 pixel){
 	}
 }
 
-unsigned int paint_font(int num,int x, int y){
+unsigned int paint_font(int x, int y,char* str,int length,int fontSize){
 	unsigned char* f = &System5x7[(GLCD_NUMBER+(num%10))*5];
 	unsigned char data;
+	int length = 5;
 	int i=0,j=0;
 	int width = 10;
 	U32 pix[2];// = {{0,0,0},{100,100,0}};
 	pix[0] = makePixel(0,0,0);
-	pix[1] = makePixel(255,0,255);
-
-	//printf("\nData[%d] : ",num);
-	for(i =0 ; i<8;i++){
-		for(j=0;j<GLCD_FONT_LEN;j++){
-			data = f[j];
-			paint_dot(x+j*width,y+i*width,width,pix[(data&(0x01<<i)?1:0)]);
-			//printf("%d\n",data&(0x01<<i));
-			//data = data<<1;
-		}
-		//printf("0x%02x ",data);
-	}
-}
-
-
-unsigned int paint_str(int x, int y,char* str,int length,int fontSize){
-	unsigned char* f;
-	unsigned char data;
-	int i=0,j=0,c=0;
-	int width = fontSize;
-	int height = fontSize;
-	int padding = fontSize-1;
-	U32 pix[2];
-	pix[0] = makePixel(0,0,0);
 	pix[1] = makePixel(255,255,255);
-	
-	for(c=0;c<length;c++){
-		f = &System5x7[(str[c]+GLCD_CHAR_OFFSET)*5];
-		for(i =0 ; i<8;i++){
-			for(j=0;j<GLCD_FONT_LEN;j++){
-				data = f[j];
-				paint_dot(x+(j*width-1)+(c*padding*8),y+(i*height-1),width,pix[(data&(0x01<<i)?1:0)]);
-			}
+
+	printf("\nData[%d] : ",num);
+	for(i =0 ; i<length;i++){
+		data = f[i];
+		printf("0x%02x ",data);
+		for(j=0;j<8;j++){
+			//paint_dot(int x, int y, int width, U32 pixel){
+			paint_dot(x+j*width,y+i*width,width,pix[data&0x80]);
+			data = data<<1;
 		}
 	}
-}
 
+}
