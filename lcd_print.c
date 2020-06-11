@@ -10,7 +10,6 @@
 #include <unistd.h>
 #include <linux/fb.h>
 #include "./glcd-font.h"
-#include "./mario.h"
 
 
 #define PUSH_SWITCH_DEVICE "/dev/fpga_push_switch"
@@ -19,7 +18,6 @@
 #define SCREEN_BPP 32
 
 #define TOUCH_SCREEN "/dev/input/event1"
-#define MARIO_STEP 30
 
 
 typedef unsigned int U32;
@@ -34,16 +32,11 @@ unsigned int initialize();
 unsigned int paint_dot(int x, int y, int width, U32 pixel);
 unsigned int paint_font(int num,int x, int y);
 unsigned int paint_str(int x, int y,char* str,int length,int fontSize,U32 pixel);
-unsigned int paint_mario(int x, int y,int Size,int draw);
 
 unsigned int makePixel(U32 r, U32 g, U32 b){
-	//return (U32)((r<<11)|(g<<5)|b);
-	return (U32)((r<<16)|(g<<8)|b);
+	return (U32)((r<<11)|(g<<5)|b);
 }
 
-unsigned int mario_x,mario_y;
-unsigned int mario_x_prev,mario_y_prev;
-unsigned int lastPush;
 int main(int argc, char** argv){
 	unsigned int width,i;
 	U32 pixel;
@@ -57,13 +50,7 @@ int main(int argc, char** argv){
 	char strBuf[30];
 	int nLen;
 
-	if(argc==4){
-		int r = atoi(argv[1]);
-		int g = atoi(argv[2]);
-		int b = atoi(argv[3]);
-		pixel = makePixel(r,g,b);
-	}
-	else pixel = makePixel(255,0,0);
+	pixel = makePixel(255,0,0);
 	
 	if(!initialize()) exit(1);
 
@@ -73,8 +60,6 @@ int main(int argc, char** argv){
 		perror("Error Mapping");
 		exit(1);
 	}	
-	mario_x = 300;
-	mario_y = 300;
 
 	while(1){
 		
@@ -93,36 +78,9 @@ int main(int argc, char** argv){
 				}
 			}
 		}
-		else if(push_data[1] == 1){
-			if(lastPush == 0) mario_y = (mario_y - MARIO_STEP)<0 ? 0 : mario_y - MARIO_STEP;
-			lastPush = 1;
-		}
-		else if(push_data[7] == 1){
-			if(lastPush == 0) mario_y = (mario_y + MARIO_STEP)>(fvs.yres-MARIO_SIZE_Y) ? fvs.yres - MARIO_SIZE_Y : mario_y + MARIO_STEP;
-			lastPush = 1;
-		}
-		else if(push_data[3] == 1){
-			if(lastPush == 0) mario_x = (mario_x - MARIO_STEP)<0 ? 0 : mario_x - MARIO_STEP;
-			lastPush = 1;
-		}
-		else if(push_data[5] == 1){
-			if(lastPush == 0) mario_x = (mario_x + MARIO_STEP)>(fvs.xres-MARIO_SIZE_X) ? fvs.xres - MARIO_SIZE_X : mario_x + MARIO_STEP;
-			lastPush = 1;
-		}
-		else lastPush = 0;
-
 		sprintf(strBuf,"Test %d",uCnt);
-		paint_str(50,50,strBuf,strlen(strBuf),3,pixel);
+		paint_str(50,50,argv[1],strlen(argv[1]),3,pixel);
 		paint_font(10,150,150);
-
-
-		if(mario_x_prev != mario_x || mario_y_prev != mario_y) 
-			paint_mario(mario_x_prev,mario_y_prev,10,0);
-		paint_mario(mario_x,mario_y,10,1);
-		mario_x_prev = mario_x;
-		mario_y_prev = mario_y;
-
-		printf("cnt : %d\n",uCnt);
 		usleep(1);
 		uCnt++;
 	}
@@ -219,21 +177,3 @@ unsigned int paint_str(int x, int y,char* str,int length,int fontSize,U32 pixel)
 	}
 }
 
-
-unsigned int paint_mario(int x, int y,int Size,int draw){
-	unsigned char* f = Mario_map;
-	unsigned char data;
-	int px =0, py =0;
-	int width = Size;
-	int height = Size;
-	U32 pix;
-
-	for(px =0 ; px<MARIO_SIZE_X;px++){
-		for(py=0;py<MARIO_SIZE_Y;py++){
-			data = f[py*MARIO_SIZE_X+px];
-			if(draw) pix = Mario_Color[data];
-			else pix = makePixel(0,0,0);
-			paint_dot(x+(px*width-1),y+(py*height-1),width,pix);
-		}
-	}
-}
