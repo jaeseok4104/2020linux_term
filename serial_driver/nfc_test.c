@@ -9,9 +9,15 @@
 #include <string.h>
 #include <termios.h>
 
+char scan(void)
+{
+
+}
+
 static int handle;
 char SERIAL_PORT[20] = "/dev/";
-unsigned char NFC_WAKE_SIGNAL[5] = {55,55,0,0,0};
+    unsigned char wake[24] = {0x55, 0x55, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x03, 0xfd, 0xd4, 0x14, 0x01, 0x17, 0x00};
 
 int main(int argc, char **argv)
 {
@@ -54,26 +60,28 @@ int main(int argc, char **argv)
     tcsetattr(handle, TCSANOW, &newtio);
     system("clear");
     printf("Serial Communication Test Program! \n");
+    printf("value : %d \n", wake[1]);
 
+    // printf("%d \n",NFC_WAKE_SIGNAL[x]);
     // Send Message
-    while (line1_data[x] != 0)
-    {
-        write(handle, &line1_data[x], sizeof(line1_data[x]));
-        usleep(20);
-        x++;
+    for(int i=0; i<24; i++){
+        printf("%x ", wake[i]);
+        write(handle, &wake[i], sizeof(wake[i]));
     }
+    printf("\n");
     
+    char pid = 0;
     // Recv Message
-    while (1)
-    {
+    while (1){
+        pid = fork();
         retval = read(handle, &temp_data, sizeof(temp_data));
-        if (retval >= 1)
-            printf("input data = %c\n\n", temp_data);
-        if(temp_data == 'q'){
-            printf("Good bye! \n");
-            break;
-        }
+        if (retval != 0)
+            printf("%x \n", temp_data);
+        // else if(retval == 0)
+        //         break;
+        // else break;
     }
+    printf("\n");
     tcsetattr(handle, TCSANOW, &oldtio);
     close(handle);
     return 0;
