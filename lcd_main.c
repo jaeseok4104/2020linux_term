@@ -5,7 +5,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/mman.h>
-#include <sys/time.h>
+#include <time.h>
 #include <signal.h>
 #include <unistd.h>
 #include <linux/fb.h>
@@ -24,6 +24,28 @@
 
 typedef unsigned int U32;
 
+typedef struct {
+	int posX;
+	int posY;
+
+	int rows;
+	int cols;
+
+	int width;
+	int height;
+
+	char **str;
+
+	int borderWidth;
+	int fontSize;
+
+	U32 borderColor;
+	U32 bgColor;
+	U32 fontColor;
+}t_table;
+
+t_table table1;
+
 int frame_fd, push_sw_dev;
 struct fb_var_screeninfo fvs;
 unsigned int* pfbdata;
@@ -33,8 +55,9 @@ long int uCnt;
 unsigned int initialize();
 unsigned int paint_dot(int x, int y, int width, U32 pixel);
 unsigned int paint_font(int num,int x, int y);
-unsigned int paint_str(int x, int y,char* str,int length,int fontSize,U32 pixel);
+unsigned int paint_str(int x, int y,char* str,int length,int fontSize,int fontpadding,U32 pixel,int transparent);
 unsigned int paint_mario(int x, int y,int Size,int draw);
+unsigned int paint_table(t_table t);
 
 unsigned int makePixel(U32 r, U32 g, U32 b){
 	//return (U32)((r<<11)|(g<<5)|b);
@@ -46,6 +69,7 @@ unsigned int mario_x_prev,mario_y_prev;
 unsigned int lastPush;
 int main(int argc, char** argv){
 	unsigned int width,i;
+	int cell =0;
 	U32 pixel;
 	int offset;
 	int posx1,posy1, posx2, posy2;
@@ -53,6 +77,8 @@ int main(int argc, char** argv){
 	unsigned short row,col;
 	unsigned char push_data[PUSH_SWITCH_MAX_BUTTON];
 	long int dist;
+
+	time_t tt;
 
 	char strBuf[30];
 	int nLen;
@@ -73,8 +99,33 @@ int main(int argc, char** argv){
 		perror("Error Mapping");
 		exit(1);
 	}	
-	mario_x = 300;
-	mario_y = 300;
+	table1.posX = 12;
+	table1.posY = 130;
+	table1.rows = 7;
+	table1.cols = 2;
+	table1.width = 1000;
+	table1.height = 450;
+	table1.borderWidth = 4;
+	table1.fontSize = 3;
+	table1.borderColor = makePixel(50,50,255);
+	table1.bgColor = makePixel(255,255,255);
+	table1.fontColor = makePixel(0,0,0);
+	table1.str = (char**)malloc(table1.rows*table1.cols*sizeof(char *));
+	for(cell =0; cell<table1.rows*table1.cols;cell++){
+		table1.str[cell] = (char *)malloc(100 * sizeof(char));
+	}
+	table1.str[0] = "Hello World";
+	table1.str[1] = "Team Project";
+	table1.str[4] = "Ha jong hee";
+	table1.str[5] = "IHLAB";
+	table1.str[14] = "Test";
+	table1.str[17] = "Linux System";
+
+
+	mario_x = 850;
+	mario_y = 30;
+	paint_table(table1);
+	paint_dot(fvs.xres/2,fvs.yres/2, 200,makePixel(0,0,255));
 
 	while(1){
 		
@@ -92,6 +143,7 @@ int main(int argc, char** argv){
 					*(pfbdata+offset+repx) = 0;
 				}
 			}
+			paint_table(table1);
 		}
 		else if(push_data[1] == 1){
 			if(lastPush == 0) mario_y = (mario_y - MARIO_STEP)<0 ? 0 : mario_y - MARIO_STEP;
@@ -111,26 +163,30 @@ int main(int argc, char** argv){
 		}
 		else lastPush = 0;
 
-		sprintf(strBuf,"Test %d",uCnt);
-		paint_str(50,50,strBuf,strlen(strBuf),3,pixel);
-		paint_font(10,150,150);
 
+		time(&tt);
+		sprintf(strBuf,"Now :%s",ctime(&tt));
+		paint_str(50,50,strBuf,strlen(strBuf),3,3,pixel,0);
 
 		if(mario_x_prev != mario_x || mario_y_prev != mario_y) 
-			paint_mario(mario_x_prev,mario_y_prev,10,0);
-		paint_mario(mario_x,mario_y,10,1);
+			paint_mario(mario_x_prev,mario_y_prev,6,0);
+		paint_mario(mario_x,mario_y,6,1);
 		mario_x_prev = mario_x;
 		mario_y_prev = mario_y;
 
 		printf("cnt : %d\n",uCnt);
 		usleep(1);
 		uCnt++;
-	}
-
+	} 
 	munmap(pfbdata,fvs.xres*fvs.yres*SCREEN_BPP /8); close(frame_fd);
 	close(push_sw_dev);
+	for(cell =0; cell<table1.rows*table1.cols;cell++){
+		free(table1.str[cell]);
+	}
+	free(table1.str);
 
-	return 0; } 
+	return 0; 
+} 
 
 unsigned int initialize(){
 	int check,i;
@@ -169,8 +225,8 @@ unsigned int paint_dot(int x, int y, int width, U32 pixel){
 		for(repx=posx1;repx<=posx2;repx++){
 			dist = (repy-y)*(repy-y) + (repx-x)*(repx-x);
 			if(offset+repx>= 1024*600 || (offset+repx)<=0) continue;
-			//if(dist <= (width*width)/4) *(pfbdata+offset+repx) = (int)pixel;	
-			*(pfbdata+offset+repx) = (int)pixel;
+			if(dist <= (width*width)/4) *(pfbdata+offset+repx) = (int)pixel;	
+			//*(pfbdata+offset+repx) = (int)pixel;
 		}
 	}
 }
@@ -188,7 +244,8 @@ unsigned int paint_font(int num,int x, int y){
 	for(i =0 ; i<8;i++){
 		for(j=0;j<GLCD_FONT_LEN;j++){
 			data = f[j];
-			paint_dot(x+j*width,y+i*width,width,pix[(data&(0x01<<i)?1:0)]);
+			//paint_dot(x+j*width,y+i*width,width,pix[(data&(0x01<<i)?1:0)]);
+			if(data&(0x01<<i))paint_dot(x+j*width,y+i*width,width,pix[1]);
 			//printf("%d\n",data&(0x01<<i));
 			//data = data<<1;
 		}
@@ -197,13 +254,13 @@ unsigned int paint_font(int num,int x, int y){
 }
 
 
-unsigned int paint_str(int x, int y,char* str,int length,int fontSize,U32 pixel){
+unsigned int paint_str(int x, int y,char* str,int length,int fontSize,int fontpadding,U32 pixel,int transparent){
 	unsigned char* f;
 	unsigned char data;
 	int i=0,j=0,c=0;
 	int width = fontSize;
 	int height = fontSize;
-	int padding = fontSize-1;
+	int padding = fontpadding;
 	U32 pix[2];
 	pix[0] = makePixel(0,0,0);
 	pix[1] = pixel;
@@ -213,7 +270,11 @@ unsigned int paint_str(int x, int y,char* str,int length,int fontSize,U32 pixel)
 		for(i =0 ; i<8;i++){
 			for(j=0;j<GLCD_FONT_LEN;j++){
 				data = f[j];
-				paint_dot(x+(j*width-1)+(c*padding*8),y+(i*height-1),width,pix[(data&(0x01<<i)?1:0)]);
+				if(data&(0x01<<i))	paint_dot(x+(j*width-1)+(c*(width*5+padding)),y+(i*height-1),width,pix[1]);
+				else if(!transparent){
+					paint_dot(x+(j*width-1)+(c*(padding+width*5)),y+(i*height-1),width,pix[0]);
+				}
+				
 			}
 		}
 	}
@@ -233,7 +294,46 @@ unsigned int paint_mario(int x, int y,int Size,int draw){
 			data = f[py*MARIO_SIZE_X+px];
 			if(draw) pix = Mario_Color[data];
 			else pix = makePixel(0,0,0);
-			paint_dot(x+(px*width-1),y+(py*height-1),width,pix);
+			if(data != 2) paint_dot(x+(px*width-1),y+(py*height-1),width,pix);
 		}
 	}
 }
+
+unsigned int paint_table(t_table t){
+	int r,c;
+	int h,w;
+	int offsetX = t.posX;
+	int offsetY = t.posY;
+	int bw = t.borderWidth;
+	int cWidth = t.width/t.cols;
+	int cHeight = t.height/t.rows;
+	if(cWidth*t.cols<t.width){
+		cWidth++;
+		t.width++;
+	}
+	if(cHeight*t.rows<t.height){
+		cHeight++;
+		t.height++;
+	}
+
+	//Draw Border
+	for(h=0; h<=t.height;h++){
+		for(w =0; w<=t.width;w++){
+			if((h%(cHeight) ==0)|| (w%(cWidth)==0))
+				paint_dot(offsetX+w,offsetY + h,bw,t.borderColor);
+			else 
+				paint_dot(offsetX+w,offsetY + h,1,t.bgColor);
+		}
+	}
+
+	for(r=0;r<t.rows;r++){
+		for(c=0;c<t.cols;c++){
+			char* s = t.str[r*t.cols + c];
+			paint_str(2*bw+offsetX+(c*cWidth),bw*2+offsetY+(r*cHeight),s,strlen(s),t.fontSize,1,t.fontColor,1);
+			printf("[%d,%d]%s\n",r,c,s);
+		}
+	}
+
+
+}
+
