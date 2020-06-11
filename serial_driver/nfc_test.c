@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     char pid = 0;
     // Recv Message
     while (1){
-        pid = fork();
+        // pid = fork();
         retval = read(handle, &temp_data, sizeof(temp_data));
         if (retval != 0)
             printf("%x \n", temp_data);
