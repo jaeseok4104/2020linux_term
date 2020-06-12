@@ -28,6 +28,8 @@ typedef struct _U_file{
 //serail connection integer//
 static int handle;
 U_file user_data;
+U_file user_check; // 출석표 출력
+
 char SERIAL_PORT[20] = "/dev/";
 
 ////////////////////////////////////////////////////////protocol//////////////////////////////////////////////////////////
@@ -44,7 +46,6 @@ const unsigned char std_ACK[25] = {
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 unsigned char old_id[5]; //req_id
-
 unsigned char receive_ACK[25]; //Command receiving buffer
 unsigned char id_buff[100];
 unsigned char temp_data;//read charactor buff
@@ -159,6 +160,15 @@ char check_id(void)
     return 0;
 }
 
+char open_file(U_file* pU_file, char *mode){
+    pU_file->user_file = fopen(pU_file->name, mode);
+    if(pU_file->user_file == NULL){
+        printf("%s file open error\n", pU_file->name);
+        return 0;
+    }
+    return 1;
+}
+
 void add_user(void)
 {
     char exist_name_flag = 1;
@@ -166,13 +176,13 @@ void add_user(void)
     char ack_buff1[5]    = {0,};
     char ack_buff2[5]    = {0,};
     char check_arr[5]    = {0,};
+    char flag = 0;
 
-    user_data.user_file = fopen(user_data.name, "a+");
-    if(user_data.user_file==NULL){
-        printf("file open error\n");
-        getchar();
-        system("clear");
-        return;
+    open_file(&user_data,  "a+");
+    if((open_file(&user_check, "r"))){
+        fclose(user_check.user_file);
+        open_file(&user_check, "a+");
+        flag = 1;
     }
 
     printf("Taging please\n");
@@ -218,7 +228,8 @@ void add_user(void)
             if(exist_name_flag){
                 printf("add Name : \n");
                 gets(add_Name);
-                fprintf(user_data.user_file,"%s\t%s\n", add_Name, id_buff);
+                fprintf(user_data.user_file,  "%s\t\t\t%s\n", add_Name, id_buff);
+                if(flag) fprintf(user_check.user_file, "\n%s\t\t\t%s\t\t\tX\n",add_Name, id_buff);
             }
             break;
         }
@@ -227,39 +238,52 @@ void add_user(void)
     for(char i=0; i<100; i++){
         id_buff[i] = 0;
     }
+
     fclose(user_data.user_file);
+    if(flag) fclose(user_check.user_file);
 }
 
-void callName_user(void)
+void made_checkboard(void)
 {
     struct _user_info{
         char name[20];
         char id[20];
     };
     struct _user_info user_info ={{0,},{0,}};
-
-    user_data.user_file = fopen(user_data.name, "a+");
-    if(user_data.user_file==NULL){
-        printf("file open error\n");
-        getchar();
-        system("clear");
+    char flag = 0;
+    
+    if(!open_file(&user_data, "r"))
         return;
-    }
+    if(!open_file(&user_check, "r")){
+        open_file(&user_check, "w+");
 
-    printf("Name                  Check\n");
-    while (!feof(user_data.user_file)){
-        fgets(user_data.line, 100, user_data.user_file);
-        sscanf(user_data.line,"%s\t%s", user_info.name, user_info.id);
-
-        printf("%s\n",user_info.name);
-
-        for(char i = 0; i<20; i++){
-            user_info.name[i] = 0;
-            user_info.id[i]   = 0;
+        fprintf(user_check.user_file, "Name\t\t\tid\t\t\tCheck\n");
+        while(!feof(user_data.user_file))
+        {
+            fgets(user_data.line, 100, user_data.user_file);
+            sscanf(user_data.line, "%s\t\t\t%s", user_info.name, user_info.id);
+            if(!feof(user_data.user_file))
+                fprintf(user_check.user_file, "%s\t\t\t%s\t\t\tX\n", user_info.name, user_info.id);
+            for (char i = 0; i < 20; i++){
+                user_info.name[i] = 0;
+                user_info.id[i] = 0;
+            }
         }
     }
+    rewind(user_check.user_file);
+    while(!feof(user_check.user_file)){
+        fgets(user_check.line, 100, user_check.user_file);
+        if(!feof(user_check.user_file))
+            printf("%s",user_check.line);
+    }
     getchar();
+    system("clear");
     fclose(user_data.user_file);
+    fclose(user_check.user_file);
+}
+
+void callName_user(void)
+{
 }
 
 int main(int argc, char **argv)
@@ -307,6 +331,7 @@ int main(int argc, char **argv)
     char func = 0;
 
     strcpy(user_data.name, "linux.txt");
+    strcpy(user_check.name,"2020-06-05.txt"); //현재 날짜로 이름 설정 ex) 2020-06-12.txt
 
     wake_card();
     usleep(100000);
@@ -328,7 +353,7 @@ int main(int argc, char **argv)
                 callName_user();
                 break;
             case 3:
-                // check_user();
+                made_checkboard();
                 break;
             default:
                 break;
