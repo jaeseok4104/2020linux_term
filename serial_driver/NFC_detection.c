@@ -25,6 +25,12 @@ typedef struct _U_file{
     int num;
 }U_file;
 
+struct _user_info{
+    char name[20];
+    char id[20];
+    char check;
+};
+
 //serail connection integer//
 static int handle;
 U_file user_data;
@@ -177,6 +183,7 @@ void add_user(void)
     char ack_buff2[5]    = {0,};
     char check_arr[5]    = {0,};
     char flag = 0;
+    char count = 100;
 
     open_file(&user_data,  "a+");
     if((open_file(&user_check, "r"))){
@@ -187,6 +194,12 @@ void add_user(void)
 
     printf("Taging please\n");
     while(1){
+        if(count>=0){
+            system("clear");
+            printf("Count : %d\n", count);
+            count--;
+        }
+        else break;
         send_tag();
         for (char i = 0; i < 25; i++)
             receive_ACK[i] = 0;
@@ -245,11 +258,7 @@ void add_user(void)
 
 void made_checkboard(void)
 {
-    struct _user_info{
-        char name[20];
-        char id[20];
-    };
-    struct _user_info user_info ={{0,},{0,}};
+    struct _user_info user_info ={{0,},{0,},0};
     char flag = 0;
     
     if(!open_file(&user_data, "r"))
@@ -282,8 +291,101 @@ void made_checkboard(void)
     fclose(user_check.user_file);
 }
 
-void callName_user(void)
-{
+void callName_user(void){
+    char exist_name_flag = 0;
+    char add_Name[30]    = {0,};
+    char ack_buff1[5]    = {0,};
+    char ack_buff2[5]    = {0,};
+    char check_arr[5]    = {0,};
+    char flag = 0;
+    char count = 100;
+
+    struct _user_info tagging_data = {{0,},{0,},0};
+    struct _user_info user_check_data = {{0,},{0,},'X'};
+    
+    if(!open_file(&user_check, "r+")){
+        printf("There is no attendance\n");
+        getchar();
+        return;
+    }
+
+    rewind(user_check.user_file);
+    if(!feof(user_check.user_file))
+        fgets(user_check.line, 100,user_check.user_file);
+    printf("Taging please\n");
+    while (1)
+    {
+        if(count>=0){
+            system("clear");
+            printf("Count : %d\n", count);
+            count--;
+        }
+        else break;
+        send_tag();
+        for (char i = 0; i < 25; i++)
+            receive_ACK[i] = 0;
+        read_ACK(25);
+        for (char i = 0; i < 5; i++)
+            ack_buff1[i] = receive_ACK[i + 19];
+        usleep(100000);
+
+        send_tag();
+        for (char i = 0; i < 25; i++)
+            receive_ACK[i] = 0;
+        read_ACK(25);
+        for (char i = 0; i < 5; i++)
+            ack_buff2[i] = receive_ACK[i + 19];
+
+        if (!strcmp(ack_buff1, check_arr)){
+            for (char i = 0; i < 5; i++){
+                id_buff[i] = ack_buff2[i];
+                id_buff[i + 5] = ack_buff1[i];
+            }
+        }
+        else{
+            for (char i = 0; i < 5; i++){
+                id_buff[i] = ack_buff1[i];
+                id_buff[i + 5] = ack_buff2[i];
+            }
+        }
+        usleep(100000);
+
+        if (check_id())
+        {
+            while (!feof(user_check.user_file)){
+                fgets(user_check.line, 100, user_check.user_file);
+                sscanf(user_check.line, "%s\t\t\t%s\t\t\t%s\n", user_check_data.name, user_check_data.id, check_arr);
+                if(strstr(user_check.line,id_buff) != NULL){
+                    if (check_arr[0] == 'O'){
+                        printf("이미 출석체크 되었습니다.\n");
+                        read_ACK(25);
+                        for (char i = 0; i < 100; i++){
+                            id_buff[i] = 0;
+                        }
+                        fclose(user_check.user_file);
+                        getchar();
+                        return;
+                    }
+
+                    fseek(user_check.user_file,-2,SEEK_CUR);
+                    fwrite("O", 1, 1, user_check.user_file);
+                    // rewind(user_check.user_file);
+                    exist_name_flag = 1;
+                    break;
+                }
+            }
+        }
+        if(exist_name_flag){
+            printf("%s님 출석체크 완료 \n",user_check_data.name);
+            getchar();
+            break;
+        }
+    }
+    read_ACK(25);
+    for (char i = 0; i < 100; i++){
+        id_buff[i] = 0;
+    }
+    fclose(user_check.user_file);
 }
 
 int main(int argc, char **argv)
@@ -344,6 +446,7 @@ int main(int argc, char **argv)
         printf("///////CallName/////////\n");
         printf("insert func: \n");
         scanf("%d", &func);
+
         getchar();
         switch(func){
             case 1:

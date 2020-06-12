@@ -1,4 +1,4 @@
 Name			id			Check
-Park			È µÂ			X
-seok			 ‰3Ì			X
-jae			8E			X
+Park			È µÂ			O
+Jae			8E			X
+Seok			 ‰3Ì			O
