@@ -159,7 +159,8 @@ void display(unsigned char tem)
 
 char check_id(void)
 {
-    for(char i=0;i<10;i++){
+    char i;
+    for(i=0;i<10;i++){
         if(id_buff[i] != 0)
             return 1;
     }
@@ -185,6 +186,8 @@ void add_user(void)
     char flag = 0;
     char count = 100;
 
+    char i = 0;
+
     open_file(&user_data,  "a+");
     if((open_file(&user_check, "r"))){
         fclose(user_check.user_file);
@@ -201,27 +204,27 @@ void add_user(void)
         }
         else break;
         send_tag();
-        for (char i = 0; i < 25; i++)
+        for (i = 0; i < 25; i++)
             receive_ACK[i] = 0;
         read_ACK(25);
-        for(char i=0; i<5;i++)
+        for(i=0; i<5;i++)
             ack_buff1[i] = receive_ACK[i+19];
         usleep(100000);
         
         send_tag();
-        for (char i = 0; i < 25; i++)
+        for (i = 0; i < 25; i++)
             receive_ACK[i] = 0;
         read_ACK(25);
-        for (char i = 0; i < 5; i++)
+        for (i = 0; i < 5; i++)
             ack_buff2[i] = receive_ACK[i+19];
         if(!strcmp(ack_buff1,check_arr)){
-            for(char i = 0; i<5; i++){
+            for(i = 0; i<5; i++){
                 id_buff[i]   = ack_buff2[i];
                 id_buff[i+5] = ack_buff1[i];
             }
         }
         else{
-            for (char i = 0; i < 5; i++){
+            for (i = 0; i < 5; i++){
                 id_buff[i]     = ack_buff1[i];
                 id_buff[i + 5] = ack_buff2[i];
             }
@@ -248,7 +251,7 @@ void add_user(void)
         }
     }
     read_ACK(25);
-    for(char i=0; i<100; i++){
+    for(i=0; i<100; i++){
         id_buff[i] = 0;
     }
 
@@ -260,6 +263,7 @@ void made_checkboard(void)
 {
     struct _user_info user_info ={{0,},{0,},0};
     char flag = 0;
+    char i = 0;
     
     if(!open_file(&user_data, "r"))
         return;
@@ -273,7 +277,7 @@ void made_checkboard(void)
             sscanf(user_data.line, "%s\t\t\t%s", user_info.name, user_info.id);
             if(!feof(user_data.user_file))
                 fprintf(user_check.user_file, "%s\t\t\t%s\t\t\tX\n", user_info.name, user_info.id);
-            for (char i = 0; i < 20; i++){
+            for (i = 0; i < 20; i++){
                 user_info.name[i] = 0;
                 user_info.id[i] = 0;
             }
@@ -299,6 +303,7 @@ void callName_user(void){
     char check_arr[5]    = {0,};
     char flag = 0;
     char count = 100;
+    char i;
 
     struct _user_info tagging_data = {{0,},{0,},0};
     struct _user_info user_check_data = {{0,},{0,},'X'};
@@ -322,28 +327,28 @@ void callName_user(void){
         }
         else break;
         send_tag();
-        for (char i = 0; i < 25; i++)
+        for (i = 0; i < 25; i++)
             receive_ACK[i] = 0;
         read_ACK(25);
-        for (char i = 0; i < 5; i++)
+        for (i = 0; i < 5; i++)
             ack_buff1[i] = receive_ACK[i + 19];
         usleep(100000);
 
         send_tag();
-        for (char i = 0; i < 25; i++)
+        for (i = 0; i < 25; i++)
             receive_ACK[i] = 0;
         read_ACK(25);
-        for (char i = 0; i < 5; i++)
+        for (i = 0; i < 5; i++)
             ack_buff2[i] = receive_ACK[i + 19];
 
         if (!strcmp(ack_buff1, check_arr)){
-            for (char i = 0; i < 5; i++){
+            for (i = 0; i < 5; i++){
                 id_buff[i] = ack_buff2[i];
                 id_buff[i + 5] = ack_buff1[i];
             }
         }
         else{
-            for (char i = 0; i < 5; i++){
+            for (i = 0; i < 5; i++){
                 id_buff[i] = ack_buff1[i];
                 id_buff[i + 5] = ack_buff2[i];
             }
@@ -359,7 +364,7 @@ void callName_user(void){
                     if (check_arr[0] == 'O'){
                         printf("이미 출석체크 되었습니다.\n");
                         read_ACK(25);
-                        for (char i = 0; i < 100; i++){
+                        for (i = 0; i < 100; i++){
                             id_buff[i] = 0;
                         }
                         fclose(user_check.user_file);
@@ -382,7 +387,7 @@ void callName_user(void){
         }
     }
     read_ACK(25);
-    for (char i = 0; i < 100; i++){
+    for (i = 0; i < 100; i++){
         id_buff[i] = 0;
     }
     fclose(user_check.user_file);
@@ -400,6 +405,7 @@ int main(int argc, char **argv)
     unsigned char line1_data[] = {"Input txd data = "};
     int retval;
     int x;
+    char i;
 
     strcat(SERIAL_PORT, argv[1]);
     printf("SERIAL PORT : %s %d\n", SERIAL_PORT, x);
@@ -439,7 +445,7 @@ int main(int argc, char **argv)
     usleep(100000);
     read_ACK(15);
     usleep(100000);
-    for(char i = 0; i<25; i++)
+    for(i = 0; i<25; i++)
         receive_ACK[i] = 0;
     while(1){
         system("clear");
