@@ -19,7 +19,7 @@
 #define SCREEN_BPP 32
 
 #define TOUCH_SCREEN "/dev/input/event1"
-#define MARIO_STEP 30
+#define MARIO_STEP 15
 
 
 typedef unsigned int U32;
@@ -53,10 +53,16 @@ int timer;
 long int uCnt;
 
 unsigned int initialize();
-unsigned int paint_dot(int x, int y, int width, U32 pixel);
+
+
+unsigned int clear_Screen();
+unsigned int paint_dot(int x, int y, int width, U32 pixel,int full);
+unsigned int paint_square(int x, int y, int width, U32 pixel,int full);
 unsigned int paint_font(int num,int x, int y);
 unsigned int paint_str(int x, int y,char* str,int length,int fontSize,int fontpadding,U32 pixel,int transparent);
 unsigned int paint_mario(int x, int y,int Size,int draw);
+
+unsigned int setTable();
 unsigned int paint_table(t_table t);
 
 unsigned int makePixel(U32 r, U32 g, U32 b){
@@ -68,20 +74,16 @@ unsigned int mario_x,mario_y;
 unsigned int mario_x_prev,mario_y_prev;
 unsigned int lastPush;
 int main(int argc, char** argv){
-	unsigned int width,i;
 	int cell =0;
 	U32 pixel;
-	int offset;
-	int posx1,posy1, posx2, posy2;
-	int repx, repy;
-	unsigned short row,col;
-	unsigned char push_data[PUSH_SWITCH_MAX_BUTTON];
-	long int dist;
 
+	int push_pid;
+	unsigned char push_data[PUSH_SWITCH_MAX_BUTTON];
+
+	// dateTime
 	time_t tt;
 
 	char strBuf[30];
-	int nLen;
 
 	if(argc==4){
 		int r = atoi(argv[1]);
@@ -89,43 +91,29 @@ int main(int argc, char** argv){
 		int b = atoi(argv[3]);
 		pixel = makePixel(r,g,b);
 	}
-	else pixel = makePixel(255,0,0);
+	else pixel = makePixel(0,255,0);
 	
+	//Device Init
 	if(!initialize()) exit(1);
 
+	// Table Data Setting
+	setTable();
+
+
+	// pointer of FrameBuffer 
 	pfbdata = (unsigned int*)mmap(0,fvs.xres*fvs.yres*SCREEN_BPP /8,PROT_READ|\
 		PROT_WRITE,MAP_SHARED,frame_fd,0);
 	if((unsigned)pfbdata == (unsigned)-1){
 		perror("Error Mapping");
 		exit(1);
 	}	
-	table1.posX = 12;
-	table1.posY = 130;
-	table1.rows = 7;
-	table1.cols = 3;
-	table1.width = 1000;
-	table1.height = 450;
-	table1.borderWidth = 4;
-	table1.fontSize = 3;
-	table1.borderColor = makePixel(50,50,255);
-	table1.bgColor = makePixel(255,255,255);
-	table1.fontColor = makePixel(0,0,0);
-	table1.str = (char**)malloc(table1.rows*table1.cols*sizeof(char *));
-	for(cell =0; cell<table1.rows*table1.cols;cell++){
-		table1.str[cell] = (char *)malloc(100 * sizeof(char));
-	}
-	table1.str[0] = "Hello World";
-	table1.str[1] = "Team Project";
-	table1.str[4] = "Ha jong hee";
-	table1.str[5] = "IHLAB";
-	table1.str[14] = "Test";
-	table1.str[17] = "Linux System";
-
 
 	mario_x = 850;
 	mario_y = 30;
 	paint_table(table1);
-	paint_dot(fvs.xres/2,fvs.yres/2, 200,makePixel(0,0,255));
+
+	// Alert Chek
+	//paint_dot(fvs.xres/2,fvs.yres/2, 200,makePixel(0,0,255),0);
 
 	while(1){
 		
@@ -137,12 +125,7 @@ int main(int argc, char** argv){
 
 		if(push_data[4] == 1){	// Clear Screen
 			printf("Clear Screen\n");
-			for(repy = 0; repy<fvs.yres;repy++){
-				offset = repy*fvs.xres;
-				for(repx=0;repx<fvs.xres;repx++){
-					*(pfbdata+offset+repx) = 0;
-				}
-			}
+			clear_Screen();
 			paint_table(table1);
 		}
 		else if(push_data[1] == 1){
@@ -206,14 +189,23 @@ unsigned int initialize(){
 		return 0;
 	}
 	
-	if(fvs.bits_per_pixel != 16){
-		perror("Unsupport Mode, 16Bpp Only!");	//return 0;
+	if(fvs.bits_per_pixel != SCREEN_BPP){
+		perror("Unsupport Mode, 32Bpp Only!");	//return 0;
 	}	
 
 
 	return 1;
 }
-unsigned int paint_dot(int x, int y, int width, U32 pixel){
+unsigned int clear_Screen(){
+	int repx,repy,offset;
+	for(repy = 0; repy<fvs.yres;repy++){
+		offset = repy*fvs.xres;
+		for(repx=0;repx<fvs.xres;repx++){
+			*(pfbdata+offset+repx) = 0;
+		}
+	}
+}
+unsigned int paint_dot(int x, int y, int width, U32 pixel,int full){
 	int posx1 = x- width/2;
 	int posy1 = y - width/2;
 	int posx2 = x + width/2;
@@ -225,12 +217,39 @@ unsigned int paint_dot(int x, int y, int width, U32 pixel){
 		for(repx=posx1;repx<=posx2;repx++){
 			dist = (repy-y)*(repy-y) + (repx-x)*(repx-x);
 			if(offset+repx>= 1024*600 || (offset+repx)<=0) continue;
-			if(dist <= (width*width)/4) *(pfbdata+offset+repx) = (int)pixel;	
-			//*(pfbdata+offset+repx) = (int)pixel;
+			if(full){
+				if(dist <= (width*width)/4) *(pfbdata+offset+repx) = (int)pixel;	
+			}else{
+				if(dist <= (width*width)/4 && dist >= ((width)*(width)/5)) *(pfbdata+offset+repx) = (int)pixel;	
+			}
 		}
 	}
 }
 
+unsigned int paint_square(int x, int y, int width, U32 pixel,int full){
+	int posx1 = x- width/2;
+	int posy1 = y - width/2;
+	int posx2 = x + width/2;
+	int posy2 = y + width/2;
+
+	int repy,repx,offset;
+	int distx,disty;
+	for(repy = posy1; repy<=posy2;repy++){
+		offset = repy*fvs.xres;
+		for(repx=posx1;repx<=posx2;repx++){
+			distx = (repx-x)*(repx-x);
+			disty = (repy-y)*(repy-y);
+			
+			if(offset+repx>= 1024*600 || (offset+repx)<0) continue;
+			if(full){
+				*(pfbdata+offset+repx) = (int)pixel;
+			}else{
+				if(distx >= (width*width)/5) *(pfbdata+offset+repx) = (int)pixel;
+				if(disty >= (width*width)/5) *(pfbdata+offset+repx) = (int)pixel;
+			}
+		}
+	}
+}
 unsigned int paint_font(int num,int x, int y){
 	unsigned char* f = &System5x7[(GLCD_NUMBER+(num%10))*5];
 	unsigned char data;
@@ -240,16 +259,11 @@ unsigned int paint_font(int num,int x, int y){
 	pix[0] = makePixel(0,0,0);
 	pix[1] = makePixel(255,0,255);
 
-	//printf("\nData[%d] : ",num);
 	for(i =0 ; i<8;i++){
 		for(j=0;j<GLCD_FONT_LEN;j++){
 			data = f[j];
-			//paint_dot(x+j*width,y+i*width,width,pix[(data&(0x01<<i)?1:0)]);
-			if(data&(0x01<<i))paint_dot(x+j*width,y+i*width,width,pix[1]);
-			//printf("%d\n",data&(0x01<<i));
-			//data = data<<1;
+			if(data&(0x01<<i))paint_dot(x+j*width,y+i*width,width,pix[1],1);
 		}
-		//printf("0x%02x ",data);
 	}
 }
 
@@ -267,12 +281,18 @@ unsigned int paint_str(int x, int y,char* str,int length,int fontSize,int fontpa
 	
 	for(c=0;c<length;c++){
 		f = &System5x7[(str[c]+GLCD_CHAR_OFFSET)*5];
+		if(str[c]=='\n'){
+			y+=height*8+padding*8;
+			x-=(c*(padding+width*5))+(width*GLCD_FONT_LEN+1);
+		
+		}
 		for(i =0 ; i<8;i++){
 			for(j=0;j<GLCD_FONT_LEN;j++){
 				data = f[j];
-				if(data&(0x01<<i))	paint_dot(x+(j*width-1)+(c*(width*5+padding)),y+(i*height-1),width,pix[1]);
+
+				if(data&(0x01<<i))	paint_dot(x+(j*width-1)+(c*(width*5+padding)),y+(i*height-1),width,pix[1],1);
 				else if(!transparent){
-					paint_dot(x+(j*width-1)+(c*(padding+width*5)),y+(i*height-1),width,pix[0]);
+					paint_dot(x+(j*width-1)+(c*(padding+width*5)),y+(i*height-1),width,pix[0],1);
 				}
 				
 			}
@@ -282,7 +302,7 @@ unsigned int paint_str(int x, int y,char* str,int length,int fontSize,int fontpa
 
 
 unsigned int paint_mario(int x, int y,int Size,int draw){
-	unsigned char* f = Mario_map;
+	unsigned char* f =(unsigned char*) Mario_map;
 	unsigned char data;
 	int px =0, py =0;
 	int width = Size;
@@ -294,9 +314,34 @@ unsigned int paint_mario(int x, int y,int Size,int draw){
 			data = f[py*MARIO_SIZE_X+px];
 			if(draw) pix = Mario_Color[data];
 			else pix = makePixel(0,0,0);
-			if(data != 2) paint_dot(x+(px*width-1),y+(py*height-1),width,pix);
+			if(data != 2) paint_square(x+(px*width-1),y+(py*height-1),width,pix,1);
 		}
 	}
+}
+
+unsigned int setTable(){
+	int cell;
+	table1.posX = 12;
+	table1.posY = 130;
+	table1.rows = 7;
+	table1.cols = 3;
+	table1.width = 1000;
+	table1.height = 450;
+	table1.borderWidth = 4;
+	table1.fontSize = 3;
+	table1.borderColor = makePixel(50,50,255);
+	table1.bgColor = makePixel(255,255,255);
+	table1.fontColor = makePixel(0,0,0);
+	table1.str = (char**)malloc(table1.rows*table1.cols*sizeof(char *));
+	for(cell =0; cell<table1.rows*table1.cols;cell++){
+		table1.str[cell] = (char *)malloc(100 * sizeof(char));
+	}
+	table1.str[0] = "Hello World";
+	table1.str[1] = "Team Project";
+	table1.str[4] = "Ha jong hee\nHEST";
+	table1.str[5] = "IHLAB";
+	table1.str[14] = "Test";
+	table1.str[17] = "Linux System";
 }
 
 unsigned int paint_table(t_table t){
@@ -320,12 +365,13 @@ unsigned int paint_table(t_table t){
 	for(h=0; h<=t.height;h++){
 		for(w =0; w<=t.width;w++){
 			if((h%(cHeight) ==0)|| (w%(cWidth)==0))
-				paint_dot(offsetX+w,offsetY + h,bw,t.borderColor);
+				paint_dot(offsetX+w,offsetY + h,bw,t.borderColor,1);
 			else 
-				paint_dot(offsetX+w,offsetY + h,1,t.bgColor);
+				paint_dot(offsetX+w,offsetY + h,1,t.bgColor,1);
 		}
 	}
 
+	// Draw String data
 	for(r=0;r<t.rows;r++){
 		for(c=0;c<t.cols;c++){
 			char* s = t.str[r*t.cols + c];
@@ -333,7 +379,5 @@ unsigned int paint_table(t_table t){
 			printf("[%d,%d]%s\n",r,c,s);
 		}
 	}
-
-
 }
 
