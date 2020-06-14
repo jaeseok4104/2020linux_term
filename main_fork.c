@@ -12,9 +12,6 @@
 #include <linux/input.h>
 #include <sys/signal.h>
 #include <termios.h>
-#include <pthread.h>
-
-
 #include "./glcd-font.h"
 #include "./mario.h"
 #include "./nfc.h"
@@ -98,7 +95,7 @@ unsigned int paint_dot(int x, int y, int width, U32 pixel,int full);
 unsigned int paint_rect(int x, int y, int width, U32 pixel,int full);
 unsigned int paint_rect2(int x, int y, int width,int height, U32 pixel,int full);
 unsigned int paint_font(int num,int x, int y);
-unsigned int paint_str(int x, int y,char* str,int length,int fontSize,int fontpadding,U32 pixel,U32 bgColor,int transparent);
+unsigned int paint_str(int x, int y,char* str,int length,int fontSize,int fontpadding,U32 pixel,int transparent);
 unsigned int paint_mario(int x, int y,int Size,int draw);
 unsigned int move_mario(unsigned char* push_data);
 
@@ -114,12 +111,10 @@ unsigned int makePixel(U32 r, U32 g, U32 b){
 }
 
 /*********** NFC_Function   **************/
+void made_checkboard(void);
 char open_file(U_file* pU_file, char *mode);
 
-void made_checkboard(void);
 void add_user(void);
-void callname_user(void);
-
 void read_ACK(unsigned char temp);
 void send_tag(void);
 char check_id(void);
@@ -141,30 +136,18 @@ unsigned int mario_x_prev,mario_y_prev;
 unsigned int lastPush;
 
 int touch_pid;
-
-
-// Thread //
-void *pThreadFunc(void* arg);
-void *pThreadTimer(void* arg);
-
-
-pthread_t threadID,threadID2;
-void* pRet;
-
-int state;  // 0: menu, 1: Register card, 2: Check, 3: show List
-int paintOnce;	//Paint Once Flag int cell =0;
-struct input_event touch_iev[3];
 int main(int argc, char** argv){
-	time_t tt;
+	int state = 0;  // 0: menu, 1: Register card, 2: Check, 3: show List
+	int paintOnce =1;	//Paint Once Flag int cell =0;
 	U32 pixel;
 	int cell;
 
-	state = 0;
-	paintOnce =1;
-
-
+	touch_pid=fork();
 	unsigned char push_data[PUSH_SWITCH_MAX_BUTTON];
+	struct input_event touch_iev[3];
 
+	// dateTime
+	time_t tt;
 
 	char strBuf[30];
 
@@ -187,12 +170,14 @@ int main(int argc, char** argv){
 
 
 	// pointer of FrameBuffer 
-	pfbdata = (unsigned int*)mmap(0,fvs.xres*fvs.yres*SCREEN_BPP /8,PROT_READ|\
-		PROT_WRITE,MAP_SHARED,frame_fd,0);
-	if((unsigned)pfbdata == (unsigned)-1){
-		perror("Error Mapping\n");
-		exit(1);
-	}	
+	if(touch_pid>0){
+		pfbdata = (unsigned int*)mmap(0,fvs.xres*fvs.yres*SCREEN_BPP /8,PROT_READ|\
+			PROT_WRITE,MAP_SHARED,frame_fd,0);
+		if((unsigned)pfbdata == (unsigned)-1){
+			perror("Error Mapping");
+			exit(1);
+		}	
+	}
 
 	clear_Screen();
 
@@ -204,52 +189,68 @@ int main(int argc, char** argv){
 
 	paint_menu();
 
-	printf("Program Start\n");
-
 	while(1){
-		read(push_sw_dev,&push_data,sizeof(push_data));
-		if(push_data[4] == 1){	// Clear Screen
-			printf("Clear Screen\n");
-			clear_Screen();
-			paintOnce = 1;
-			//made_checkboard();
-			//paint_table(table1);
-		}
-
-		move_mario(push_data);
-		time(&tt);
-		sprintf(strBuf,"Now :%s",ctime(&tt));
-		paint_str(100,50,strBuf,strlen(strBuf),3,3,makePixel(0,255,0),0,0);
-
-		if(paintOnce){
-			paintOnce = 0;
-			switch(state){
-				case 0:		//menu
-					paint_menu();
-					break;
-				case 1:		// Register Card
-					paint_register();
-					add_user();
-					break;
-				case 2:		// Check 
-					paint_register();
-					callname_user();
-					state =0;
-					paintOnce=1;
-				
-					break;
-				case 3:		// Show List
-					paint_table(table1);
-					break;
-				default:
-					break;
+		if(touch_pid==0){
+			printf("Child\n");
+			if(read(touch_fd,touch_iev,sizeof(struct input_event)*3) <0){
+				perror("Error : could not read touch");
+				continue;
+			}
+			if(touch_iev[0].type ==1 && touch_iev[1].type == 3 && touch_iev[2].type == 3){
+				int touchX = touch_iev[1].value;
+				int touchY = touch_iev[2].value;
+				unsigned int ret = touch_scan(touchX,touchY);
+				if(ret != 255){
+					if(state==0) state = ret;
+					else if(ret == 0) state = 0;
+					paintOnce = 1;
+	
+					if(state==0 && ret == 0) break;
+	
+					}
+					printf("Touched %d,%d",touchX,touchY);
 				}
+		}
+		else if(touch_pid>0){
+			read(push_sw_dev,&push_data,sizeof(push_data));
+			if(push_data[4] == 1){	// Clear Screen
+				printf("Clear Screen\n");
+				clear_Screen();
+				paintOnce = 1;
+				//made_checkboard();
+				//paint_table(table1);
+			}
+			move_mario(push_data);
+			time(&tt);
+			sprintf(strBuf,"Now :%s",ctime(&tt));
+			paint_str(100,50,strBuf,strlen(strBuf),3,3,pixel,0);
+	
+			if(paintOnce){
+				switch(state){
+					case 0:		//menu
+						paint_menu();
+						break;
+					case 1:		// Register Card
+						paint_register();
+						//add_user();
+						break;
+					case 2:		// Check 
+					
+						break;
+					case 3:		// Show List
+						paint_table(table1);
+						break;
+					default:
+						break;
+				}
+				paintOnce = 0;
+			}
 		}
 	} 
 	munmap(pfbdata,fvs.xres*fvs.yres*SCREEN_BPP /8); close(frame_fd);
 	close(push_sw_dev);
-	tcsetattr(hNFC,TCSANOW,&oldtio);
-	close(hNFC);
+	//tcsetattr(hNFC,TCSANOW,&oldtio);
+	//close(hNFC);
 	for(cell =0; cell<table1.rows*table1.cols;cell++){
 		free(table1.str[cell]);
 	}
@@ -260,32 +261,38 @@ int main(int argc, char** argv){
 
 unsigned int initialize(){
 	int check,i;
-	int nRet,status;
-	if((push_sw_dev = open(PUSH_SWITCH_DEVICE,O_RDONLY))<0){
-		perror("Push Switch Device open error");
-		return 0;
-	}
+	if(touch_pid>0){
+		if((push_sw_dev = open(PUSH_SWITCH_DEVICE,O_RDONLY))<0){
+			perror("Push Switch Device open error");
+			return 0;
+		}
 	
-	if((frame_fd=open("/dev/fb0",O_RDWR))<0){
-		perror("Frame Buffer Open Error!");
-		return 0;
-	}
-	if((check= ioctl(frame_fd,FBIOGET_VSCREENINFO,&fvs))<0){
-		perror("Get Information Error - VSCREENINFO!");
-		return 0;
-	}
-	
-	if(fvs.bits_per_pixel != SCREEN_BPP){
-		perror("Unsupport Mode, 32Bpp Only!");	//return 0;
-		return 0;
-	}	
+		if((frame_fd=open("/dev/fb0",O_RDWR))<0){
+			perror("Frame Buffer Open Error!");
+			return 0;
+		}
+		if((check= ioctl(frame_fd,FBIOGET_VSCREENINFO,&fvs))<0){
+			perror("Get Information Error - VSCREENINFO!");
+			return 0;
+		}
+		
+		if(fvs.bits_per_pixel != SCREEN_BPP){
+			perror("Unsupport Mode, 32Bpp Only!");	//return 0;
+			return 0;
+		}	
+	}else if(touch_pid ==0){
 
-	if((touch_fd = open(TOUCH_SCREEN,O_RDONLY))<0){
-		perror("Touch Screen Open Error");
-		return 0;
+		if((touch_fd = open(TOUCH_SCREEN,O_RDONLY))<0){
+			perror("Touch Screen Open Error");
+			return 0;
+		}
+
 	}
 
-	if((hNFC = open(NFC_PORT,O_RDWR | O_NOCTTY))<0){
+
+	/*
+
+	if((hNFC = open(NFC_PORT,O_RDWR | O_NOCTTY)<0)){
 			perror("could not open NFC");
 			return 0;
 	}
@@ -303,7 +310,7 @@ unsigned int initialize(){
 	newtio.c_cc[VMIN] = 0;
 	tcflush(hNFC,TCIFLUSH);
 	tcsetattr(hNFC,TCSANOW,&newtio);
-	printf("Initialized\n");
+	printf("Initialized!");
 
 	wake_card();
 	usleep(100000);
@@ -311,16 +318,7 @@ unsigned int initialize(){
 	usleep(100000);
 	for(i=0;i<25;i++)
 		receive_ACK[i] = 0;
-
-	// Thread
-	if((nRet = pthread_create(&threadID,NULL,pThreadFunc,NULL))!= 0){
-		perror("pThread create error!\n");
-		return 0;
-	}
-	if((nRet = pthread_create(&threadID2,NULL,pThreadTimer,NULL))!= 0){
-		perror("pThread create error!\n");
-		return 0;
-	}
+		*/
 
 	return 1;
 }
@@ -403,7 +401,7 @@ unsigned int clear_Screen(){
 		}
 	}
 	paint_rect2(button_back.posX,button_back.posY,button_back.width,button_back.height,button_back.color,1);
-	paint_str(button_back.posX+5,button_back.posY+button_back.height/2-(fontSize*3),button_back.caption,strlen(button_back.caption),fontSize,3,makePixel(255,255,255),0,1);
+	paint_str(button_back.posX+5,button_back.posY+button_back.height/2-(fontSize*3),button_back.caption,strlen(button_back.caption),fontSize,3,makePixel(255,255,255),1);
 }
 unsigned int paint_dot(int x, int y, int width, U32 pixel,int full){
 	int posx1 = x- width/2;
@@ -493,7 +491,7 @@ unsigned int paint_font(int num,int x, int y){
 }
 
 
-unsigned int paint_str(int x, int y,char* str,int length,int fontSize,int fontpadding,U32 pixel,U32 bgColor,int transparent){
+unsigned int paint_str(int x, int y,char* str,int length,int fontSize,int fontpadding,U32 pixel,int transparent){
 	unsigned char* f;
 	unsigned char data;
 	int len = strlen(str);
@@ -502,7 +500,7 @@ unsigned int paint_str(int x, int y,char* str,int length,int fontSize,int fontpa
 	int height = fontSize;
 	int padding = fontpadding;
 	U32 pix[2];
-	pix[0] = bgColor;
+	pix[0] = makePixel(0,0,0);
 	pix[1] = pixel;
 	
 	for(c=0;c<length;c++){
@@ -616,7 +614,7 @@ unsigned int paint_table(t_table t){
 	}
 	time(&tt);
 	sprintf(strBuf,"#Day:%s",user_check.name);
-	paint_str(100,80,strBuf,strlen(strBuf),3,3,makePixel(255,0,0),0,0);
+	paint_str(100,80,strBuf,strlen(strBuf),3,3,makePixel(255,0,0),0);
 
 	//Draw Border
 	for(h=0; h<=t.height;h++){
@@ -638,7 +636,7 @@ unsigned int paint_table(t_table t){
 		for(c=0;c<t.cols;c++){
 			char* s = t.str[r*t.cols + c];
 			
-			paint_str(2*bw+offsetX+(c*cWidth),bw*2+offsetY+(r*cHeight),s,strlen(s),t.fontSize,1,t.fontColor,0,1);
+			paint_str(2*bw+offsetX+(c*cWidth),bw*2+offsetY+(r*cHeight),s,strlen(s),t.fontSize,1,t.fontColor,1);
 			printf("[%d,%d]%s\n",r,c,s);
 		}
 	}
@@ -660,10 +658,10 @@ unsigned int paint_menu(){
 
 
 	//Paint Button Caption
-	paint_str(button_register.posX+10,button_register.posY+button_register.height/2-(fontSize*7),button_register.caption,15,fontSize,3,makePixel(0,0,0),0,1);
-	paint_str(button_check.posX+10,button_check.posY+button_check.height/2-(fontSize*7),button_check.caption,15,fontSize,3,makePixel(0,0,0),0,1);
-	paint_str(button_list.posX+10,button_list.posY+button_list.height/2-(fontSize*7),button_list.caption,32,fontSize,3,makePixel(0,0,0),0,1);
-	paint_str(button_back.posX+5,button_back.posY+button_back.height/2-(fontSize*3),button_back.caption,strlen(button_back.caption),fontSize,3,makePixel(255,255,255),0,1);
+	paint_str(button_register.posX+10,button_register.posY+button_register.height/2-(fontSize*7),button_register.caption,15,fontSize,3,makePixel(0,0,0),1);
+	paint_str(button_check.posX+10,button_check.posY+button_check.height/2-(fontSize*7),button_check.caption,15,fontSize,3,makePixel(0,0,0),1);
+	paint_str(button_list.posX+10,button_list.posY+button_list.height/2-(fontSize*7),button_list.caption,32,fontSize,3,makePixel(0,0,0),1);
+	paint_str(button_back.posX+5,button_back.posY+button_back.height/2-(fontSize*3),button_back.caption,strlen(button_back.caption),fontSize,3,makePixel(255,255,255),1);
 	//paint_str(int x, int y,char* str,int length,int fontSize,int fontpadding,U32 pixel,int transparent);
 }
 
@@ -671,6 +669,8 @@ unsigned int paint_register(){
 	char str[100];
 	//paint_rect(int x, int y, int width, U32 pixel,int full);
 	paint_rect2(button_register.posX,button_register.posY,button_list.width,430,makePixel(255,255,255),1);
+	strcpy(str,"Test");
+	paint_str(button_list.posX,button_list.posY-20,str,18,10,5,makePixel(255,0,0),1);
 }
 
 ////////////////////////////////////////// NFC JaeSeock
@@ -739,7 +739,7 @@ void made_checkboard(void){
 char open_file(U_file* pU_file,char *mode){
 	pU_file->user_file = fopen(pU_file->name,mode);
 	if(pU_file->user_file == NULL){
-		printf(" Error : %s file open error\n",pU_file->name);
+		printf("%s file open error\n",pU_file->name);
 		return 0;
 	}
 	return 1;
@@ -752,9 +752,7 @@ void add_user(void){
 	char ack_buff2[5]	={0,};
 	char check_arr[5]	={0,};
 	char flag = 0;
-	signed char count = 30;
-
-	char strBuf[30];
+	signed char count = 10;
 
 	char i=0;
 
@@ -768,13 +766,9 @@ void add_user(void){
 	printf("Tagging Please\n");
 	while(1){
 		if(count>0){
-			sprintf(strBuf,"%d",count);
 			printf("Count : %d\n",count--);
-			paint_str(462,370,strBuf,5,10,0,makePixel(0,0,0),makePixel(255,255,255),0);
 		}
-		else{
-			break;
-		}
+		else break;
 
 		send_tag();
 		for (i=0;i<25;i++)
@@ -810,26 +804,13 @@ void add_user(void){
 				fgets(user_data.line,100,user_data.user_file);
 				if(strstr(user_data.line,id_buff) != NULL){
 					printf("already exist ID : %s \n",user_data.line);
-					char tmp[30];
-					int n;
-					strcpy(tmp,user_data.line);
-					for(n=0;tmp[n]!='\t';n++);
-					tmp[n] = '\0';
-					
-					sprintf(strBuf,"already exist ID : %s \n",tmp);
-					paint_rect2(button_register.posX,button_register.posY,button_list.width,430,makePixel(255,255,255),1);
-					paint_str(200,370,strBuf,strlen(strBuf),5,1,makePixel(0,0,0),makePixel(255,255,255),0);
-
 					exist_name_flag=0;
-					//getchar();
+					getchar();
 					break;
 				}
 			}
 			if(exist_name_flag){
 				printf("add Name : \n");
-				sprintf(strBuf,"add Name\n");
-				paint_rect2(button_register.posX,button_register.posY,button_list.width,430,makePixel(255,255,255),1);
-				paint_str(520,370,strBuf,strlen(strBuf),3,0,makePixel(0,0,0),makePixel(255,255,2550),0);
 				gets(add_Name);
 				fprintf(user_data.user_file,"%s\t\t\t%s\n", add_Name,id_buff);
 				if(flag) fprintf(user_check.user_file,"%s\t\t\t%s\t\t\tX\n",add_Name,id_buff);
@@ -844,10 +825,6 @@ void add_user(void){
 
 	fclose(user_data.user_file);
 	if(flag) fclose(user_check.user_file);
-
-	paintOnce = 1;
-	state = 0;
-	usleep(1500000);
 }
 
 void read_ACK(unsigned char temp){
@@ -856,105 +833,6 @@ void read_ACK(unsigned char temp){
 		if(read(hNFC,&temp_data,sizeof(temp_data)))
 			receive_ACK[i] = temp_data;
 	}
-}
-void callname_user(void){
-	char exist_name_flag = 0;
-	char add_Name[30] ={0,};
-	char ack_buff1[5]	={0,};
-	char ack_buff2[5]	={0,};
-	char check_arr[5]	={0,};
-	char flag = 0;
-	signed char count = 30;
-	char strBuf[30];
-	char i=0;
-
-	struct _user_info tagging_data = {{0,},{0,},0};
-	struct _user_info user_check_data = {{0,},{0,},'X'};
-
-    if(!open_file(&user_check, "r+")){
-        printf("There is no attendance\n");
-        getchar();
-        return;
-    }
-
-    rewind(user_check.user_file);
-    if(!feof(user_check.user_file))
-        fgets(user_check.line, 100,user_check.user_file);
-    while (1)
-    {
-        if(count>=0){
-            sprintf(strBuf,"Tagging plz %d", count);
-			paint_str(300,370,strBuf,strlen(strBuf)+4,3,0,makePixel(0,0,0),makePixel(255,255,255),0);
-            count--;
-        }
-        else break;
-
-        send_tag();
-        for (i = 0; i < 25; i++)
-            receive_ACK[i] = 0;
-        read_ACK(25);
-        for (i = 0; i < 5; i++)
-            ack_buff1[i] = receive_ACK[i + 19];
-        usleep(100000);
-
-        send_tag();
-        for (i = 0; i < 25; i++)
-            receive_ACK[i] = 0;
-        read_ACK(25);
-        for (i = 0; i < 5; i++)
-            ack_buff2[i] = receive_ACK[i + 19];
-
-        if (!strcmp(ack_buff1, check_arr)){
-            for (i = 0; i < 5; i++){
-                id_buff[i] = ack_buff2[i];
-                id_buff[i + 5] = ack_buff1[i];
-            }
-        }
-        else{
-            for (i = 0; i < 5; i++){
-                id_buff[i] = ack_buff1[i];
-                id_buff[i + 5] = ack_buff2[i];
-            }
-        }
-        usleep(100000);
-
-        if (check_id())
-        {
-            while (!feof(user_check.user_file)){
-                fgets(user_check.line, 100, user_check.user_file);
-                sscanf(user_check.line, "%s\t\t\t%s\t\t\t%s\n", user_check_data.name, user_check_data.id, check_arr);
-                if(strstr(user_check.line,id_buff) != NULL){
-                    if (check_arr[0] == 'O'){
-                        sprintf(strBuf,"Alread checked");
-                        read_ACK(25);
-                        for (i = 0; i < 100; i++){
-                            id_buff[i] = 0;
-                        }
-                        fclose(user_check.user_file);
-						paint_rect2(button_register.posX,button_register.posY,button_list.width,430,makePixel(255,255,255),1);
-						paint_str(200,370,strBuf,strlen(strBuf),5,1,makePixel(0,0,0),makePixel(255,255,255),0);
-
-						usleep(1500000);
-                        return;
-                    }
-
-                    fseek(user_check.user_file,-2,SEEK_CUR);
-                    fwrite("O", 1, 1, user_check.user_file);
-                    // rewind(user_check.user_file);
-                    exist_name_flag = 1;
-                    break;
-                }
-            }
-        }
-        if(exist_name_flag){
-            sprintf(strBuf,"%s checked!",user_check_data.name);
-			paint_rect2(button_register.posX,button_register.posY,button_list.width,430,makePixel(255,255,255),1);
-			paint_str(200,370,strBuf,strlen(strBuf),5,1,makePixel(0,0,0),makePixel(255,255,255),0);
-			usleep(1500000);
-            break;
-        }
-	}
-
 }
 
 void send_tag(void){
@@ -979,40 +857,3 @@ void wake_card(){
 		write(hNFC,&wake[i],sizeof(wake[i]));
 }
 
-
-void *pThreadFunc(void * arg)
-{
-	while(1){
-
-		if(read(touch_fd,touch_iev,sizeof(struct input_event)*3) <0){
-			perror("Error : could not read touch");
-			continue;
-		}
-		if(touch_iev[0].type ==1 && touch_iev[1].type == 3 && touch_iev[2].type == 3){
-			int touchX = touch_iev[1].value;
-			int touchY = touch_iev[2].value;
-			unsigned int ret = touch_scan(touchX,touchY);
-			if(ret != 255){
-				if(state==0) state = ret;
-				else if(ret == 0) state = 0;
-				paintOnce = 1;
-
-				//if(state==0 && ret == 0) break;
-
-			}
-			printf("Touched %d,%d\n",touchX,touchY);
-		}
-	}
-
-}
-void *pThreadTimer(void * arg){
-
-	time_t tt;
-	char strBuf[100];
-	while(1){
-		// dateTime
-		time(&tt);
-		sprintf(strBuf,"Now :%s",ctime(&tt));
-		//paint_str(100,50,strBuf,strlen(strBuf),3,3,makePixel(0,255,0),0,0);
-	}
-}

@@ -198,7 +198,7 @@ void add_user(void)
     printf("Taging please\n");
     while(1){
         if(count>=0){
-            system("clear");
+            //system("clear");
             printf("Count : %d\n", count);
             count--;
         }
@@ -290,7 +290,7 @@ void made_checkboard(void)
             printf("%s",user_check.line);
     }
     getchar();
-    system("clear");
+    //system("clear");
     fclose(user_data.user_file);
     fclose(user_check.user_file);
 }
@@ -321,7 +321,7 @@ void callName_user(void){
     while (1)
     {
         if(count>=0){
-            system("clear");
+            //system("clear");
             printf("Count : %d\n", count);
             count--;
         }
@@ -433,7 +433,7 @@ int main(int argc, char **argv)
     newtio.c_cc[VMIN] = 0;
     tcflush(handle, TCIFLUSH);
     tcsetattr(handle, TCSANOW, &newtio);
-    system("clear");
+    //system("clear");
     printf("Serial Communication Test Program! \n");
 
     char func = 0;
@@ -448,7 +448,7 @@ int main(int argc, char **argv)
     for(i = 0; i<25; i++)
         receive_ACK[i] = 0;
     while(1){
-        system("clear");
+        //system("clear");
         printf("///////CallName/////////\n");
         printf("insert func: \n");
         scanf("%d", &func);
