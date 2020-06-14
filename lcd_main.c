@@ -102,7 +102,7 @@ int main(int argc, char** argv){
 	table1.posX = 12;
 	table1.posY = 130;
 	table1.rows = 7;
-	table1.cols = 2;
+	table1.cols = 3;
 	table1.width = 1000;
 	table1.height = 450;
 	table1.borderWidth = 4;
