@@ -28,7 +28,7 @@
 
 #define TOUCH_SCREEN "/dev/input/event1"
 #define NFC_PORT "/dev/ttyUSB0"
-#define KEYBOARD "/dev/input/event6"
+#define KEYBOARD_EVENT "/dev/input/event6"
 #define MARIO_STEP 15
 
 
@@ -84,7 +84,7 @@ t_button button_check;
 t_button button_register;
 t_button button_back;
 
-int frame_fd, push_sw_dev,touch_fd;
+int frame_fd, push_sw_dev,touch_fd,keyboard_fd;
 struct fb_var_screeninfo fvs;
 unsigned int* pfbdata;
 
@@ -135,13 +135,22 @@ unsigned char id_buff[100];
 unsigned char temp_data;
 
 struct termios oldtio,newtio;
+/////////////////////////////////////////////
+
+// Keyboard
+
+char keyBuf[300];
+char keymapping[255];
+
+unsigned int key_read(char* buf);
+char key_map(char* arr);
+
+
+//////////////////////////////////////////////
 
 unsigned int mario_x,mario_y;
 unsigned int mario_x_prev,mario_y_prev;
 unsigned int lastPush;
-
-int touch_pid;
-
 
 // Thread //
 void *pThreadFunc(void* arg);
@@ -149,7 +158,7 @@ void *pThreadTimer(void* arg);
 
 
 pthread_t threadID,threadID2;
-void* pRet;
+///////////////////////////////////////////
 
 int state;  // 0: menu, 1: Register card, 2: Check, 3: show List
 int paintOnce;	//Paint Once Flag int cell =0;
@@ -239,6 +248,7 @@ int main(int argc, char** argv){
 				
 					break;
 				case 3:		// Show List
+					made_checkboard();
 					paint_table(table1);
 					break;
 				default:
@@ -246,10 +256,15 @@ int main(int argc, char** argv){
 				}
 		}
 	} 
-	munmap(pfbdata,fvs.xres*fvs.yres*SCREEN_BPP /8); close(frame_fd);
-	close(push_sw_dev);
+	munmap(pfbdata,fvs.xres*fvs.yres*SCREEN_BPP /8);
+	close(frame_fd);
 	tcsetattr(hNFC,TCSANOW,&oldtio);
+	
+	close(push_sw_dev);
 	close(hNFC);
+	close(keyboard_fd);
+	close(touch_fd);
+	
 	for(cell =0; cell<table1.rows*table1.cols;cell++){
 		free(table1.str[cell]);
 	}
@@ -282,6 +297,11 @@ unsigned int initialize(){
 
 	if((touch_fd = open(TOUCH_SCREEN,O_RDONLY))<0){
 		perror("Touch Screen Open Error");
+		return 0;
+	}
+
+	if((keyboard_fd = open(KEYBOARD_EVENT,O_RDONLY))<0){
+		perror("Keyboard Open Error");
 		return 0;
 	}
 
@@ -830,7 +850,8 @@ void add_user(void){
 				sprintf(strBuf,"add Name\n");
 				paint_rect2(button_register.posX,button_register.posY,button_list.width,430,makePixel(255,255,255),1);
 				paint_str(520,370,strBuf,strlen(strBuf),3,0,makePixel(0,0,0),makePixel(255,255,2550),0);
-				gets(add_Name);
+				//gets(add_Name);
+				key_read(add_Name);
 				fprintf(user_data.user_file,"%s\t\t\t%s\n", add_Name,id_buff);
 				if(flag) fprintf(user_check.user_file,"%s\t\t\t%s\t\t\tX\n",add_Name,id_buff);
 			}
@@ -873,7 +894,6 @@ void callname_user(void){
 
     if(!open_file(&user_check, "r+")){
         printf("There is no attendance\n");
-        getchar();
         return;
     }
 
@@ -954,6 +974,11 @@ void callname_user(void){
             break;
         }
 	}
+    read_ACK(25);
+    for (i = 0; i < 100; i++){
+        id_buff[i] = 0;
+    }
+    fclose(user_check.user_file);
 
 }
 
@@ -1015,4 +1040,120 @@ void *pThreadTimer(void * arg){
 		sprintf(strBuf,"Now :%s",ctime(&tt));
 		//paint_str(100,50,strBuf,strlen(strBuf),3,3,makePixel(0,255,0),0,0);
 	}
+}
+
+
+
+
+
+unsigned int key_read(char* buf){
+	char arr[200];
+	int idx=0;
+	char c=0;
+
+	while(c != '\n'){
+		read(keyboard_fd,&arr,sizeof(arr));
+		read(keyboard_fd,&arr,sizeof(arr));
+		c = key_map(arr);
+		if(c== 0){
+
+			;
+		}
+		else if(c == '\b'){
+			buf[idx-1] = '\0';
+			idx--;
+		}
+		else if(c == '\n' || c=='\r') buf[idx] = '\0';
+		else{
+			buf[idx++] = c;
+		}
+		paint_str(300,300,buf,idx+1,3,1,makePixel(0,0,0),makePixel(255,255,255),0);
+	}
+}
+char key_map(char* arr){
+	char data =0;
+	if(arr[12] == 30)
+		data = '1';
+	else if(arr[12] == 31)
+		data = '2';	
+	else if(arr[12] == 32)
+		data = '3';
+	else if(arr[12] == 33)
+		data = '4';		
+	else if(arr[12] == 34)
+		data = '5';
+	else if(arr[12] == 35)
+		data = '6';	
+	else if(arr[12] == 36)
+		data = '7';
+	else if(arr[12] == 37)
+		data = '8';
+	else if(arr[12] == 38)
+		data = '9';
+	else if(arr[12] == 39)
+		data = '0';
+	else if(arr[12] == 42)
+		data = '\b';
+	else if(arr[12] == 20)
+		data = 'q';
+	else if(arr[12] == 26)
+		data = 'w';	
+	else if(arr[12] == 8)
+		data = 'e';
+	else if(arr[12] == 21)
+		data = 'r';		
+	else if(arr[12] == 23)
+		data = 't';
+	else if(arr[12] == 28)
+		data = 'y';	
+	else if(arr[12] == 24)
+		data = 'u';
+	else if(arr[12] == 12)
+		data = 'i';
+	else if(arr[12] == 18)
+		data = 'o';
+	else if(arr[12] == 19)
+		data = 'p';
+	else if(arr[12] == 4)
+		data = 'a';
+	else if(arr[12] == 22)
+		data = 's';
+	else if(arr[12] == 7)
+		data = 'd';	
+	else if(arr[12] == 9)
+		data = 'f';
+	else if(arr[12] == 10)
+		data = 'g';		
+	else if(arr[12] == 11)
+		data = 'h';
+	else if(arr[12] == 13)
+		data = 'j';	
+	else if(arr[12] == 14)
+		data = 'k';
+	else if(arr[12] == 15)
+		data = 'l';
+	else if(arr[12] == 29)
+		data = 'z';
+	else if(arr[12] == 27)
+		data = 'x';
+	else if(arr[12] == 6)
+		data = 'c';
+	else if(arr[12] == 25)
+		data = 'v';
+	else if(arr[12] == 5)
+		data = 'b';	
+	else if(arr[12] == 17)
+		data = 'n';
+	else if(arr[12] == 16)
+		data = 'm';		
+	else if(arr[12] == 44)
+		data = ' ';
+	else if(arr[12] == 40)
+		data = '\n';	
+	else if(arr[12] == 41)
+		;
+	//	quit = 1;
+	else
+		data = ' ';
+	return data;
 }
