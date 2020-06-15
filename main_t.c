@@ -169,6 +169,9 @@ int exitTouch;
 int state;  // 0: menu, 1: Register card, 2: Check, 3: show List
 int paintOnce;	//Paint Once Flag int cell =0;
 struct input_event touch_iev[3];
+
+int dirx;
+int diry;
 int main(int argc, char** argv){
 	time_t tt;
 	U32 pixel;
@@ -212,12 +215,14 @@ int main(int argc, char** argv){
 	clear_Screen();
 
 	//paint_table(table1);
-	mario_x = 850;
+	mario_x = 50;
 	mario_x_prev = 850;
 	mario_y = 30;
 	mario_y_prev = 30;
+	dirx = 5;
+	diry = 2;
 
-	paint_menu();
+	//paint_menu();
 
 	printf("Program Start\n");
 
@@ -240,35 +245,49 @@ int main(int argc, char** argv){
 			paintOnce = 0;
 			switch(state){
 				case 0:		//menu
-					paint_menu();
 					break;
 				case 1:		// Register Card
-					paint_register();
-					add_user();
 					break;
 				case 2:		// Check 
-					paint_register();
-					callname_user();
-					state =0;
-					paintOnce=1;
 				
 					break;
 				case 3:		// Show List
-					made_checkboard();
-					paint_table(table1);
 					break;
 				default:
 					break;
 				}
 		}
+
+		mario_x += dirx;
+		mario_y += diry;
+
+		if( mario_x <=dirx) {
+			mario_x = 0;
+			dirx = -dirx;
+		}
+		if( mario_y <=diry){
+			mario_y = 0;
+			diry = -diry;
+		}
+		if(mario_x >=(fvs.xres - 6*MARIO_SIZE_X-dirx)){
+			mario_x = (fvs.xres - 6*MARIO_SIZE_X-dirx);
+			dirx = -dirx;
+		}
+		if(mario_y >=(fvs.yres - 6*MARIO_SIZE_Y-diry)){
+			mario_y = (fvs.yres - 6*MARIO_SIZE_Y-diry);
+			diry = -diry;
+
+		}
+
+		
 	} 
 	munmap(pfbdata,fvs.xres*fvs.yres*SCREEN_BPP /8);
 	close(frame_fd);
-	tcsetattr(hNFC,TCSANOW,&oldtio);
+	//tcsetattr(hNFC,TCSANOW,&oldtio);
 	
 	close(push_sw_dev);
-	close(hNFC);
-	close(keyboard_fd);
+	//close(hNFC);
+	//close(keyboard_fd);
 	close(touch_fd);
 	
 	for(cell =0; cell<table1.rows*table1.cols;cell++){
@@ -319,6 +338,7 @@ unsigned int initialize(){
 		return 0;
 	}
 
+	/*
 	if((keyboard_fd = open(KEYBOARD_EVENT,O_RDONLY))<0){
 		perror("Keyboard Open Error");
 		return 0;
@@ -350,6 +370,7 @@ unsigned int initialize(){
 	usleep(100000);
 	for(i=0;i<25;i++)
 		receive_ACK[i] = 0;
+		*/
 
 	// Thread
 	if((nRet = pthread_create(&threadID,NULL,pThreadFunc,NULL))!= 0){
@@ -360,6 +381,7 @@ unsigned int initialize(){
 		perror("pThread create error!\n");
 		return 0;
 	}
+	
 
 	return 1;
 }
@@ -578,12 +600,12 @@ unsigned int paint_mario(int x, int y,int Size,int draw){
 	int height = Size;
 	U32 pix;
 
-	for(px =0 ; px<MARIO_SIZE_X;px++){
+	for(px =0; px<MARIO_SIZE_X;px++){
 		for(py=0;py<MARIO_SIZE_Y;py++){
 			data = f[py*MARIO_SIZE_X+px];
 			if(draw) pix = Mario_Color[data];
 			else pix = makePixel(0,0,0);
-			if(data != 2) paint_rect(x+(px*width-1),y+(py*height-1),width,pix,1);
+			if(data != 2) paint_rect(x+((MARIO_SIZE_X-1-px)*width-1),y+(py*height-1),width,pix,1);
 		}
 	}
 }

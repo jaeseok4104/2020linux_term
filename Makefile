@@ -1,6 +1,6 @@
 DEV	:=	push_switch
 DD	:=	fpga_$(DEV)_driver
-APP	:=	lcd_touch_circle
+APP	:=	main
 TFTPDIR	:=	/nfsroot
 CC	=	arm-none-linux-gnueabi-gcc
 KDIR	:=	/root/work/achroimx6q/kernel
